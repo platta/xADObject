@@ -9,7 +9,7 @@ GUID = '771a25fa-6d9c-4439-88f3-669857004713'
 Author = 'Adam Platt and Adam Bertram'
 
 # Company or vendor of this module
-CompanyName = 'PowerShell Summit'
+CompanyName = ''
 
 # Copyright statement for this module
 Copyright = '(c) 2015 All rights reserved.'
