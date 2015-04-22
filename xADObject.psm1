@@ -43,6 +43,7 @@ function Get-xADObjectResource {
         $ReturnValue = @{
             DistinguishedName = $DistinguishedName
             Ensure = $null
+            Type = $null
             Property = @{}
         }
 
@@ -53,9 +54,11 @@ function Get-xADObjectResource {
             # If we got this far, we know the object exists in AD
             $ReturnValue.Ensure = "Present"
 
+            $ReturnValue.Type = $Object.ObjectClass
+
             # Build the hashtable of properties, excluding some that are
             # constants.
-            $Properties = $Object | Get-Member -MemberType Properties | Where-Object -Property Name -NotIn DistinguishedName, ObjectClass, ObjectGUID
+            $Properties = $Object | Get-Member -MemberType Properties
             foreach ($Item in $Properties) {
                 $ReturnValue.Property[$Item.Name] = $Object."$($Item.Name)"
             }
@@ -111,6 +114,9 @@ function Set-xADObjectResource {
 		[System.String]
 		$Ensure,
 
+        [System.String]
+        $Type,
+
 		[Microsoft.Management.Infrastructure.CimInstance[]]
 		$Property,
 
@@ -137,24 +143,31 @@ function Set-xADObjectResource {
             $Object = Get-ADObject -Identity $DistinguishedName -Properties * -Credential $Credential
 
             if ($Ensure -eq "Present") {
-                # Build an array of property names.
-                $Properties = $Object | Get-Member -MemberType Properties | Where-Object -Property Name -NotIn DistinguishedName, ObjectClass, ObjectGUID | Select-Object -ExpandProperty Name
-
-                # Build a hashtable to pass to Set-ADObject.
-                $Replace = @{}
-                foreach ($Item in $Property) {
-                    if ($Item.Key -notin $Properties) {
-                        throw "Property $($Item.Key) does not exist on object $DistinguishedName"
-                    }
-
-                    if ($Object."$($Item.Key)" -ne $Item.Value) {
-                        $Replace[$Item.Key] = $Item.Value
-                    }
+                # Make sure the types match if a type was specified.
+                if ($Type -and $Type -ne $Object.ObjectClass) {
+                    throw "Object $DistinguishedName is type '$($Object.ObjectClass)', not '$Type'"
                 }
 
-                # Update the object.
-                if ($Replace.Count -gt 0) {
-                    Set-ADObject -Identity $DistinguishedName -Replace $Replace -Credential $Credential
+                if ($Property) {
+                    # Build an array of property names.
+                    $Properties = $Object | Get-Member -MemberType Properties
+
+                    # Build a hashtable to pass to Set-ADObject.
+                    $Replace = @{}
+                    foreach ($Item in $Property) {
+                        if ($Item.Key -notin $Properties) {
+                            throw "Property $($Item.Key) does not exist on object $DistinguishedName"
+                        }
+
+                        if ($Object."$($Item.Key)" -ne $Item.Value) {
+                            $Replace[$Item.Key] = $Item.Value
+                        }
+                    }
+
+                    # Update the object.
+                    if ($Replace.Count -gt 0) {
+                        Set-ADObject -Identity $DistinguishedName -Replace $Replace -Credential $Credential
+                    }
                 }
             } else {
                 # Remove the object.
@@ -162,8 +175,33 @@ function Set-xADObjectResource {
             }
         } catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
             if ($Ensure -eq "Present") {
-                # Object does not exist but ensure is present. We can't do that.
-                Write-Error "Operation not supported. Cannot create a new AD Object."
+                # Object does not exist but ensure is present. Create
+                # a new object.
+
+                # First make sure the type is set, this is required when
+                # creating an object.
+                if (!$Type) {
+                    Write-Error "In order to create a new AD Object, you must specify a Type."
+                } else {
+                    # Separate the Name from the Path in the
+                    # Distinguished Name.
+                    $Name = Split-DistinguishedName -DistinguishedName $DistinguishedName -Name
+                    $Path = Split-DistinguishedName -DistinguishedName $DistinguishedName -Path
+
+                    if ($Property) {
+                        # Other attributes specified.
+                        $OtherAttributes = @{}
+
+                        foreach ($Item in $Property) {
+                            $OtherAttributes[$Item.Key] = $Item.Value
+                        }
+
+                        New-ADObject -Name $Name -Path $Path -Type $Type -Credential $Credential -OtherAttributes $OtherAttributes
+                    } else {
+                        # No attributes specified, just create.
+                        New-ADObject -Name $Name -Path $Path -Type $Type -Credential $Credential
+                    }
+                }
             }
         } catch {
             Write-Error $_.Exception.Message
@@ -210,6 +248,9 @@ function Test-xADObjectResource {
 		[System.String]
 		$Ensure,
 
+        [System.String]
+        $Type,
+
 		[Microsoft.Management.Infrastructure.CimInstance[]]
 		$Property,
 
@@ -220,10 +261,18 @@ function Test-xADObjectResource {
 
 	# Get the current state.
     $Current = Get-xADObjectResource -DistinguishedName $DistinguishedName -Credential $Credential
-
+    Write-Verbose "Here, $($Current["Ensure"])"
     if ($Current -and $Current["Ensure"] -eq "Present") {
         # Object is present.
         if ($Ensure -eq "Present") {
+            Write-Verbose "Current is present"
+            # Check the type
+            Write-Verbose "Type is $Type and Current Type is $($Current.Type)"
+            if ($Type -and $Type -ne $Current.Type) {
+                return $false
+            }
+
+            # Check properties
             foreach ($Item in $Property) {
                 if (-not ($Current["Property"].ContainsKey($Item.Key)) -or $Current["Property"][$Item.Key] -ne $Item.Value) {
                     # Found a property that does not exist or does not match.
@@ -265,5 +314,39 @@ function Test-ADDomainController {
     } catch {
         Write-Error $_.Exception.Message
         return $false
+    }
+}
+
+function Split-DistinguishedName {
+    [CmdletBinding(
+        DefaultParameterSetName = "ReturnName"
+    )]
+    [OutputType([System.String])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$DistinguishedName,
+
+        [Parameter(ParameterSetName = "ReturnName")]
+        [switch]$Name,
+
+        [Parameter(ParameterSetName = "ReturnPath")]
+        [switch]$Path
+    )
+
+    process {
+        $FirstComma = $DistinguishedName.IndexOf(",")
+        if ($FirstComma -eq -1) {
+            $FirstComma = $DistinguishedName.Length
+        }
+
+        switch ($PSCmdlet.ParameterSetName) {
+            "ReturnName" {
+                return $DistinguishedName.Substring(3, $FirstComma - 3)
+            }
+
+            "ReturnPath" {
+                return $DistinguishedName.Substring($FirstComma + 1)
+            }
+        }
     }
 }
