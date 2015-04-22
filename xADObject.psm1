@@ -147,11 +147,15 @@ function Set-xADObjectResource {
                         throw "Property $($Item.Key) does not exist on object $DistinguishedName"
                     }
 
-                    $Replace[$Item.Key] = $Item.Value
+                    if ($Object."$($Item.Key)" -ne $Item.Value) {
+                        $Replace[$Item.Key] = $Item.Value
+                    }
                 }
 
                 # Update the object.
-                Set-ADObject -Identity $DistinguishedName -Replace $Replace -Credential $Credential
+                if ($Replace.Count -gt 0) {
+                    Set-ADObject -Identity $DistinguishedName -Replace $Replace -Credential $Credential
+                }
             } else {
                 # Remove the object.
                 Remove-ADObject -Identity $DistinguishedName -Credential $Credential
