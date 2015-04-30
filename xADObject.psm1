@@ -117,7 +117,7 @@ function Set-xADObjectResource {
         [System.String]
         $Type,
 
-		[Microsoft.Management.Infrastructure.CimInstance[]]
+		#[Microsoft.Management.Infrastructure.CimInstance[]]
 		$Property,
 
         [parameter(Mandatory = $true)]
@@ -150,8 +150,8 @@ function Set-xADObjectResource {
 
                 if ($Property) {
                     # Build an array of property names.
-                    $Properties = $Object | Get-Member -MemberType Properties
-
+                    $Properties = $Object | Get-Member -MemberType Properties | Select-Object -ExpandProperty Name
+                    
                     # Build a hashtable to pass to Set-ADObject.
                     $Replace = @{}
                     foreach ($Item in $Property) {
@@ -251,7 +251,7 @@ function Test-xADObjectResource {
         [System.String]
         $Type,
 
-		[Microsoft.Management.Infrastructure.CimInstance[]]
+		#[Microsoft.Management.Infrastructure.CimInstance[]]
 		$Property,
 
         [parameter(Mandatory = $true)]
@@ -261,13 +261,10 @@ function Test-xADObjectResource {
 
 	# Get the current state.
     $Current = Get-xADObjectResource -DistinguishedName $DistinguishedName -Credential $Credential
-    Write-Verbose "Here, $($Current["Ensure"])"
     if ($Current -and $Current["Ensure"] -eq "Present") {
         # Object is present.
         if ($Ensure -eq "Present") {
-            Write-Verbose "Current is present"
             # Check the type
-            Write-Verbose "Type is $Type and Current Type is $($Current.Type)"
             if ($Type -and $Type -ne $Current.Type) {
                 return $false
             }
@@ -310,7 +307,11 @@ function Test-ADDomainController {
     try {
         # Check whether or not the AD-Domain-Services feature is installed.
         $ADDS = Get-WindowsFeature -Name AD-Domain-Services
-        return $ADDS.Installed
+        if ($ADDS) {
+            return $ADDS.Installed
+        } else {
+            return $false
+        }
     } catch {
         Write-Error $_.Exception.Message
         return $false
@@ -335,17 +336,19 @@ function Split-DistinguishedName {
 
     process {
         $FirstComma = $DistinguishedName.IndexOf(",")
-        if ($FirstComma -eq -1) {
-            $FirstComma = $DistinguishedName.Length
-        }
 
         switch ($PSCmdlet.ParameterSetName) {
             "ReturnName" {
+                if ($FirstComma -eq -1) {
+                    $FirstComma = $DistinguishedName.Length
+                }
                 return $DistinguishedName.Substring(3, $FirstComma - 3)
             }
 
             "ReturnPath" {
-                return $DistinguishedName.Substring($FirstComma + 1)
+                if ($FirstComma -ne -1) {
+                    return $DistinguishedName.Substring($FirstComma + 1)
+                }
             }
         }
     }
