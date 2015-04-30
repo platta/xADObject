@@ -1,6 +1,9 @@
 # xADObject
 PowerShell DSC Resource for managing properties on any Active Directory Object.
 
+__Note__ Right now there is no support for forcing the deletion of objects marked with the "Protect object from accidental deletion" option. This may or may not be added based on community feedback. So far the concensus from my coworkers is that the DSC Resource should not allow you to override that protection.
+
+
 # Example
 
 ```PowerShell
