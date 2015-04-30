@@ -108,6 +108,8 @@ Describe Set-xADObjectResource {
     }
 
     InModuleScope xADObject {
+        # Mock up AD cmdlets so we don't actually affect AD.
+        # Also note that Assert-MockCalled won't work right if these are declared outside InModuleScope 
         Mock Remove-ADObject {}
         Mock New-ADObject {}
         Mock Set-ADObject {}
