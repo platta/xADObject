@@ -1,10 +1,10 @@
 ﻿[ClassVersion("1.0"), FriendlyName("xADObject")]
 class xADObjectResource : OMI_BaseResource
 {
-	[Key, Description("Specifies the Distinguished Name of the AD Object")] String DistinguishedName;
-	[Write, Description("Specifies whether the AD Object should be present or absent"), ValueMap{"Present","Absent"}, Values{"Present","Absent"}] String Ensure;
+    [Key, Description("Specifies the Distinguished Name of the AD Object")] String DistinguishedName;
+    [Write, Description("Specifies whether the AD Object should be present or absent"), ValueMap{"Present","Absent"}, Values{"Present","Absent"}] String Ensure;
     [Write, Description("Specifies what type of AD Object the specified object should be")] String Type;
-	[Write, EmbeddedInstance("MSFT_KeyValuePair"), Description("Specifies the properties to set on the AD Object")] String Property[];
+    [Write, EmbeddedInstance("MSFT_KeyValuePair"), Description("Specifies the properties to set on the AD Object")] String Property[];
     [Required, EmbeddedInstance("MSFT_Credential"), Description("Specifies a user account that has permission to send the request.")] string Credential;
 };
 
