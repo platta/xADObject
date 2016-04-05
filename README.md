@@ -1,5 +1,3 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/19k3xufkhrxuvc8g?svg=true)](https://ci.appveyor.com/project/AdamPlatt/xadobject)
-
 # xADObject
 PowerShell DSC Resource for managing properties on any Active Directory Object.
 
